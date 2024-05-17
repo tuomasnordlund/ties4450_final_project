@@ -1,20 +1,23 @@
 # -*- coding: utf-8 -*-
-
-# %% ==========================================================================
+"""
+@author: Tuomas Nordlund
+"""
+# %%
 """ 
 Reading the data
 """
 import numpy as np
 import pandas as pd
 
-df = pd.read_csv("C:/Users/Kone/Documents/harrasteluastna/liver/Indian Liver Patient Dataset (ILPD).csv", na_values=np.nan)
+
+df = pd.read_csv("Indian Liver Patient Dataset (ILPD).csv", na_values=np.nan)
 rng = np.random.RandomState(19583563)
 
-# %% ==========================================================================
+
+#%%
 """
 Data exploration
 """
-# =============================================================================
 # Age       : Age of patient
 # Gender    : Gender of patient
 # TB        : Total Bilirubin level (high = bad)
@@ -26,7 +29,7 @@ Data exploration
 # ALB       : Albumin level
 # A/G ratio : Ratio of albumin and globulin (1.1 - 2.5 normal; 3.4-5.4 for A, 2.0-3.5 for G)
 # Selector  : Healthy / ill
-# =============================================================================
+
 
 print(df.shape) # data dimensions: 583 rows, 11 columns
 #len(df.index)
@@ -37,6 +40,9 @@ print(df.describe())
 print(df.dtypes)
 # Gender data type is object
 print(df['Gender'].head())
+
+#%%
+print(df['Selector'].value_counts())
 
 #%%
 
@@ -64,9 +70,14 @@ print(df['Selector'].value_counts()) # Selector value 1 = healthy, 2 = diseased
 
 #%%
 
+df.replace(['Female', 'Male'], [0,1], inplace=True)
+df.head()
+
+#%%
+
 print(df.skew().sort_values(ascending=False))
 
-# %% ==========================================================================
+# %%
 """
 Data visualization
 
@@ -74,15 +85,9 @@ Dimensions and the amount of subplots are hard-coded for simplification.
 This is bad practice.
 """
 
-# Plotting columns as histograms will fail if gender is not a numeric value:
-df.replace(['Female', 'Male'], [0,1], inplace=True)
-df.head()
-
-
-# %%
 import matplotlib.pyplot as plt
 
-def plot_histograms(df):
+def plot_histograms(df, title=None):
     # 10 subplots are divided to two plots to deal with the subplots overlapping
     fig, axs = plt.subplots(2, 2)
     for i, column in enumerate(df.columns[0:4]):
@@ -90,12 +95,14 @@ def plot_histograms(df):
             df[column].value_counts().plot(kind='bar', ax=axs.ravel()[i], title=column)
         else:
             df[column].plot(kind='hist', ax=axs.ravel()[i], title=column)
+    fig.suptitle(title)
     plt.tight_layout()
     plt.show()
     
     fig, axs = plt.subplots(3, 2)
     for i, column in enumerate(df.columns[4:10]):
         df[column].plot(kind='hist', ax=axs.ravel()[i], title=column)
+    fig.suptitle(title)
     plt.tight_layout()
     plt.show()
 
@@ -210,12 +217,13 @@ vif_data['Feature'] = X_vif.columns
 vif_data['VIF'] = [variance_inflation_factor(X_vif.values, i) for i in range(X_vif.shape[1])]
 print(vif_data)
 
+del X_vif
+
 #%%
 """
 Split data into training and testing sets
 """
 from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LogisticRegression
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random_state=rng)
 
@@ -224,6 +232,7 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random
 """
 Test how well a logistic regression model captures the raw data
 """
+from sklearn.linear_model import LogisticRegression
 
 clf = LogisticRegression(solver='newton-cholesky', random_state=rng)
 clf.fit(X_train, y_train)
@@ -267,6 +276,7 @@ Random Forest is robust against scale differences in the data.
 It can also be used to extract most important features.
 """
 from sklearn.ensemble import RandomForestClassifier
+
 clf_forest = RandomForestClassifier(random_state=rng)
 clf_forest.fit(X_train, y_train)
 
@@ -308,7 +318,6 @@ clf_knn_confmatrix = confusion_matrix(y_test, clf_knn.predict(X_test), labels=[0
 Test how XGBoost Classifier can deal with the data.
 """
 
-
 from xgboost import XGBClassifier
 from sklearn.metrics import classification_report
 
@@ -326,7 +335,8 @@ modifications or preprocessing we reach quite good classification scores.
 We can try improving the score by processing the data for example with 
 scalarization and PCA.
 
-We will start by attempting to visualize the two most important components.
+We will start by attempting to visualize the two most important components 
+for scalarized and unscalarized training data.
 """
 
 from sklearn.preprocessing import StandardScaler
@@ -339,8 +349,8 @@ X_train_scaled = scaler.fit_transform(X_train)
 X_pca = pca_2c.fit_transform(X_train_scaled)
 
 #%%
-
 plt.scatter(X_pca[:, 0], X_pca[:, 1], c=y_train)
+plt.show()
 print(pca_2c.components_)
 print(pca_2c.explained_variance_)
 
@@ -351,6 +361,7 @@ Test how explained variance increases with the number of principal components.
 
 n_comps = np.arange(10)
 var_ratios = []
+
 for n in n_comps:
     pca = PCA(n_components=n)
     pca.fit(X_train_scaled)
@@ -468,8 +479,9 @@ def remove_collinear(X):
 
 X_train_vif, removed_features = remove_collinear(X_train)
 X_test_vif = X_test.drop(removed_features, axis='columns')
+#%%
 sns.heatmap(X_train_vif[2:].corr())
-
+#%%
 res_vif = run_tests(X_train_vif, X_test_vif, y_train, y_test)
 
 #%%
@@ -484,11 +496,13 @@ mask = y_lof != -1
 mask2 = y_lof == -1
 X_train_lof = X_train[mask]
 y_train_lof = y_train[mask]
-X_outliers = X_train[mask2]
+X_lof_outliers = X_train[mask2]
 
 plot_histograms(X_train)
-plot_histograms(X_train_lof)
-
+#%%
+plot_histograms(X_train_lof, title="Outliers removed with LOF")
+#%%
+del mask, mask2
 #%%
 
 res_lof = run_tests(X_train_lof, X_test, y_train_lof, y_test)
@@ -520,10 +534,17 @@ def remove_outliers(data):
 
 X_train_iqr, X_iqr_outliers = remove_outliers(X_train)
 y_train_iqr = y_train.drop(X_iqr_outliers.index)
-plot_histograms(X_train_iqr)
+#%%
+plot_histograms(X_train_iqr, title="Outliers removed with IQR")
 #%%
 
 res_iqr = run_tests(X_train_iqr, X_test, y_train_iqr, y_test)
+
+#%%
+"""
+Plot histograms with Power Transformation
+"""
+plot_histograms(pd.DataFrame(PowerTransformer().fit_transform(X_train), columns=X_train.columns), title="Yeo-Johnson-transformed data")
 
 #%%
 """
@@ -537,6 +558,25 @@ plot_histograms(X_train_iqr_vif)
 #%%
 
 res_iqr_vif = run_tests(X_train_iqr_vif, X_test_vif, y_train_iqr_vif, y_test)
+
+#%%
+"""
+Combine LOF with VIF to create a dataset with less outliers and collinearity.
+"""
+
+lof2 = LocalOutlierFactor()
+y_lof2 = lof2.fit_predict(X_train)
+mask = y_lof2 != -1
+
+X_train_lof_vif = X_train_vif[mask]
+y_train_lof_vif = y_train[mask]
+
+del mask
+#%%
+plot_histograms(X_train_lof_vif, title="Data with LOF + VIF")
+#%%
+
+res_lof_vif = run_tests(X_train_lof_vif, X_test_vif, y_train_lof_vif, y_test)
 
 #%%
 """
@@ -567,23 +607,30 @@ res_vif_best, res_vif_keys = max_value_keys(res_vif)
 res_lof_best, res_lof_keys = max_value_keys(res_lof)
 res_iqr_best, res_iqr_keys = max_value_keys(res_iqr)
 res_iqr_vif_best, res_iqr_vif_keys = max_value_keys(res_iqr_vif)
+res_lof_vif_best, res_lof_vif_keys = max_value_keys(res_lof_vif)
 
 print(f'Best score without preprocessing: {res_best} found with {res_keys}')
 print(f'Best score with VIF: {res_vif_best} found with {res_vif_keys}')
 print(f'Best score with LOF: {res_lof_best} found with {res_lof_keys}')
 print(f'Best score with IQR: {res_iqr_best} found with {res_iqr_keys}')
 print(f'Best score with IQR and VIF: {res_iqr_vif_best} found with {res_iqr_vif_keys}')
+print(f'Best score with LOF and VIF: {res_lof_vif_best} found with {res_lof_vif_keys}')
 
 #%%
 
 """
-There are no noteworthy improvements above a score ~0.76. In general the best results
+There are no noteworthy improvements above a score ~0.75-0.77. In general the best results
 are reached with logistic regression and random forest. For now 
 we will choose Random Forest as our model and tune its hyperparameters.
-Based on the scores the best combination is either to use robust scaler 
-or VIF and Yeo-Johnson.
+
+Random forest hyperparameter search for VIF- and LOF-processed
+data.
+Prev. score for LOF + VIF + StandardScaler + RF: 0.7513
 """
+
 from sklearn.model_selection import RandomizedSearchCV
+
+n_components = np.arange(2,10)
 
 n_estimators = [int(x) for x in np.linspace(100, 500, num=10)]
 max_depth = [[None], [int(x) for x in np.linspace(1, 15, 15)]]
@@ -592,14 +639,18 @@ min_samples_split = np.arange(2,10)
 max_features = ['sqrt', 'log2']
 bootstrap = [True, False]
 
+pca = PCA()
 rf = RandomForestClassifier()
-param_dist = {'model__n_estimators': n_estimators,
+
+param_dist = {'pca__n_components': n_components,
+              'model__n_estimators': n_estimators,
               'model__max_depth': max_depth,
               'model__min_samples_split': min_samples_split,
               'model__max_features': max_features,
               'model__bootstrap': bootstrap}
 
-pipe_rf = Pipeline(steps=[('scaler', PowerTransformer()),
+pipe_rf = Pipeline(steps=[('scaler', StandardScaler()),
+                           ('pca', pca),
                           ('model', rf)])
 
 rs = RandomizedSearchCV(pipe_rf,
@@ -608,95 +659,211 @@ rs = RandomizedSearchCV(pipe_rf,
                         cv=5,
                         random_state=rng)
 
+
+
+rs.fit(X_train_lof_vif, y_train_lof_vif)
+
+#%%
+
+print(rs.best_params_)
+print(rs.best_score_)
+
+#%%
+"""
+Random forest hyperparameter search for LOF-processed data.
+Prev. score for LOF + StandardScaler + PCA + RF : 0.7772
+"""
 rs2 = RandomizedSearchCV(pipe_rf,
                         param_dist,
                         n_iter=50,
                         cv=5,
                         random_state=rng)
+rs2.fit(X_train_lof, y_train_lof)
 
-rs.fit(X_train_vif, y_train)
-rs2.fit(X_train, y_train)
 #%%
-
-print(rs.best_params_)
-print(rs.best_score_)
 print(rs2.best_params_)
 print(rs2.best_score_)
-
-#%%
-
-pipe_rf2 = Pipeline(steps=[('scaler', RobustScaler()),
-                           ('model', rf)])
-
-rs3 = RandomizedSearchCV(pipe_rf2,
-                        param_dist,
-                        n_iter=50,
-                        cv=5,
-                        random_state=rng)
-
-rs3.fit(X_train, y_train)
-
-print(rs3.best_params_)
-print(rs3.best_score_)
-
-rs3.fit(X_train_vif, y_train)
-
-print(rs3.best_params_)
-print(rs3.best_score_)
 
 
 #%%
 """
-We can try optimizing linear regression as well
+Random forest hyperparameter search without PCA.
+Prev. score for VIF + RobustScaler + RF: 0.7668
+"""
+param_dist2 = {'model__n_estimators': n_estimators,
+              'model__max_depth': max_depth,
+              'model__min_samples_split': min_samples_split,
+              'model__max_features': max_features,
+              'model__bootstrap': bootstrap}
+
+pipe_rf2 = Pipeline(steps=[('scaler', RobustScaler()),
+                          ('model', rf)])
+
+
+rs3 = RandomizedSearchCV(pipe_rf2,
+                        param_dist2,
+                        n_iter=50,
+                        cv=5,
+                        random_state=rng)
+
+rs3.fit(X_train_vif, y_train)
+
+#%%
+print(rs3.best_params_)
+print(rs3.best_score_)
+
+#%%
+"""
+Random forest hyperparameter search without PCA.
+Prev. score for Yeo-Johnson + RobustScaler + RF: 0.7617
+"""
+pipe_rf3 = Pipeline(steps=[('scaler', PowerTransformer()),
+                          ('model', rf)])
+
+
+rs4 = RandomizedSearchCV(pipe_rf3,
+                        param_dist2,
+                        n_iter=50,
+                        cv=5,
+                        random_state=rng)
+
+rs4.fit(X_train, y_train)
+
+#%%
+
+print(rs4.best_params_)
+print(rs4.best_score_)
+
+
+#%%
+"""
+We can try optimizing logistic regression as well.
+Solver 'liblinear' can use L1 and L2 penalties.
+Prev. score for VIF + PCA + RobustScaler + Log. Regr.: 0.7565
+Prev. score for PCA + RobustScaler + Log. Regr.: 0.7565
 """
 
 n_comp = np.arange(2,11)
 whiten = [True, False]
 
-penalty = [None, 'l1', 'l2']
+penalty = ['l1', 'l2']
 C = np.linspace(1, 5)
-solver = ['liblinear', 'saga']
+solver = ['liblinear']
 
 pca = PCA()
 lr = LogisticRegression()
 
-param_dist = {'pca__n_components': n_comp,
-              'pca__whiten': whiten,
-              'model__penalty': penalty,
-              'model__C': C,
-              'model__solver': solver}
+param_dist_lr = {'pca__n_components': n_comp,
+                 'pca__whiten': whiten,
+                 'model__penalty': penalty,
+                 'model__C': C,
+                 'model__solver': solver}
 
-pipe_logreg = Pipeline(steps=[('scaler', StandardScaler()),
+pipe_logreg = Pipeline(steps=[('scaler', RobustScaler()),
                               ('pca', pca),
                               ('model', lr)])
 
 rs_lr = RandomizedSearchCV(pipe_logreg,
-                           param_dist,
+                           param_dist_lr,
                            n_iter=50,
                            cv=5,
                            random_state=rng)
 
 rs_lr2 = RandomizedSearchCV(pipe_logreg,
-                           param_dist,
+                           param_dist_lr,
                            n_iter=50,
                            cv=5,
                            random_state=rng)
 
 rs_lr.fit(X_train, y_train)
-rs_lr2.fit(X_train_iqr, y_train_iqr)
+rs_lr2.fit(X_train_vif, y_train)
 
 #%%
 
 print(rs_lr.best_params_)
-print(rs_lr.refit_time_)
 print(rs_lr.best_score_)
 print(rs_lr2.best_params_)
-print(rs_lr2.refit_time_)
 print(rs_lr2.best_score_)
 
+#%%
+"""
+Based on the achieved scores the best models are:
+VIF + RobustScaler + RF:
+    n_estimators: 500,
+    min_samples_split: 2,
+    max_features: sqrt,
+    max_depth: 3,
+    bootstrap: True
+score=0.7103
 
+VIF + PCA + RobustScaler + LR :
+    pca__whiten: False,
+    pca__n_components: 8,
+    solver: liblinear,
+    penalty: L2,
+    C: 3.857
+score = 0.7103
+"""
+
+rf = RandomForestClassifier(n_estimators=500,
+                  min_samples_split=2,
+                  max_features='sqrt',
+                  max_depth=3,
+                  bootstrap=True)
+
+rf_pipe = Pipeline([('scaler', RobustScaler()),
+                    ('rf', rf)])
+
+pca = PCA(n_components=8)
+lr = LogisticRegression(solver='liblinear',
+                        penalty='l2',
+                        C=3.857)
+
+lr_pipe = Pipeline([('scaler', RobustScaler()),
+                    ('pca', pca),
+                    ('lr', lr)])
+
+rf_pipe.fit(X_train_vif, y_train)
+lr_pipe.fit(X_train_vif, y_train)
 
 #%%
+
+print(rf_pipe.score(X_test_vif, y_test))
+print(lr_pipe.score(X_test_vif, y_test))
+
+#%%
+from sklearn.metrics import roc_curve, auc
+
+y_pred_prob_rf = rf_pipe.predict_proba(X_test_vif)[:,1]
+y_pred_prob_lr = lr_pipe.predict_proba(X_test_vif)[:,1]
+
+confusion_matrix(y_test, rf_pipe.predict(X_test_vif), labels=[0,1])
+confusion_matrix(y_test, lr_pipe.predict(X_test_vif), labels=[0,1])
+
+#%%
+
+probs = [y_pred_prob_rf, y_pred_prob_lr]
+plt.figure()
+
+for p in probs:
+    fpr, tpr, thresholds = roc_curve(y_test, p)
+    roc_auc = auc(fpr, tpr)
+    
+    plt.plot(fpr, tpr, label='ROC curve (area = %0.2f)' % roc_auc)
+    
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title('ROC curve for liver disease classification')
+    
+plt.plot([0, 1], [0, 1], 'k--', label='No Skill')
+plt.legend()
+plt.show()
+
+
+
+
 
 
 
